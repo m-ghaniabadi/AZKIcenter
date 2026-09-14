@@ -1456,8 +1456,10 @@ document.addEventListener('keydown', e => {
   }
 });
 
-const SUPABASE_URL = "https://hbiygeecakpgjnfieyyt.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable__MGWCrgYYtyMFFQ9NjK5XQ_Ps-emOHk";
+const SUPABASE_URL = "https://uqsjikbaiduwpbjugdjv.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_YMCX6Z78k884o14B8VTWPQ_y8hfCG8i";
+
+const USERNAME_EMAIL_DOMAIN = "bimename.com";
 
 const TABLE_TARGETS = "daily_targets";
 const TABLE_BUGS = "bug_reports";
@@ -1481,6 +1483,10 @@ function stripSpaces(el) {
 stripSpaces(document.getElementById('username'));
 stripSpaces(document.getElementById('password'));
 
+function usernameToEmail(u) {
+  return u.trim() + '@' + USERNAME_EMAIL_DOMAIN;
+}
+
 function showError(msg) {
   loginError.textContent = msg;
   loginError.style.display = 'block';
@@ -1495,22 +1501,8 @@ loginForm.addEventListener('submit', async (e) => {
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
 
-  // پیدا کردن ایمیل حساب از روی نام کاربری؛ کاربر نیازی به وارد کردن ایمیل ندارد
-  const { data: profile, error: profileError } = await supabaseClient
-    .from(TABLE_PROFILES)
-    .select('email')
-    .eq('backoffice_id', username.trim())
-    .single();
-
-  if (profileError || !profile || !profile.email) {
-    loginBtn.disabled = false;
-    loginBtn.textContent = 'ورود';
-    showError('نام کاربری یا رمز عبور اشتباه است');
-    return;
-  }
-
   const { data, error } = await supabaseClient.auth.signInWithPassword({
-    email: profile.email,
+    email: usernameToEmail(username),
     password
   });
 
@@ -1821,7 +1813,7 @@ async function loadCenterAgentReport(userId) {
 async function enterApp(user) {
   loginScreen.style.display = 'none';
   appScreen.style.display = 'block';
-  document.getElementById('user-label').textContent = user.user_metadata?.username || user.email?.split('@')[0] || 'کاربر';
+  document.getElementById('user-label').textContent = user.email.split('@')[0];
 
   currentUserId = user.id;
   loadLastUpdate();
