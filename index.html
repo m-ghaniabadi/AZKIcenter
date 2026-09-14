@@ -1510,7 +1510,8 @@ loginForm.addEventListener('submit', async (e) => {
   loginBtn.textContent = 'ورود';
 
   if (error) {
-    showError('نام کاربری یا رمز عبور اشتباه است');
+    console.error('Supabase auth error:', error);
+    showError('نام کاربری یا رمز عبور اشتباه است (جزئیات فنی: ' + error.message + ')');
     return;
   }
   supabaseClient.from('login_events').insert({ user_id: data.user.id }).then(({ error: logError }) => {
