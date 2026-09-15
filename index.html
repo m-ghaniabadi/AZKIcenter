@@ -2123,6 +2123,39 @@ function buildMemberItemsHtml(membersWithTotals) {
   }).join('');
 }
 
+function buildGroupedMemberItemsHtml(membersWithTotals) {
+  const groupsMap = new Map();
+  membersWithTotals.forEach(item => {
+    const centerName = item.m.field || 'بدون سنتر';
+    if (!groupsMap.has(centerName)) groupsMap.set(centerName, []);
+    groupsMap.get(centerName).push(item);
+  });
+
+  const groups = Array.from(groupsMap.entries()).map(([centerName, items]) => {
+    const total = items.reduce((sum, it) => sum + it.myTotal, 0);
+    return { centerName, items, total };
+  });
+
+  groups.sort((a, b) => b.total - a.total);
+
+  return groups.map(g => `
+    <div class="leader-item">
+      <button class="leader-header" type="button">
+        <div class="leader-name-wrap">
+          <svg class="leader-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <span class="leader-name">${g.centerName}</span>
+        </div>
+        <div class="leader-right">
+          <span class="leader-total">${formatNumber(g.total)}</span>
+        </div>
+      </button>
+      <div class="leader-details">
+        <div class="leader-details-inner">${g.items.map(it => buildMemberItemsHtml([it])).join('')}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
 function bindExpandableToggles(container) {
   container.querySelectorAll('.leader-item').forEach(litem => {
     const header = litem.querySelector(':scope > .leader-header');
@@ -2253,7 +2286,7 @@ async function loadTeamView(leaderId) {
 
   membersWithTotals.sort((a, b) => b.myTotal - a.myTotal);
 
-  const memberBlocks = buildMemberItemsHtml(membersWithTotals);
+  const memberBlocks = buildGroupedMemberItemsHtml(membersWithTotals);
 
   container.innerHTML = memberBlocks;
   document.getElementById('team-period-total').textContent = formatNumber(teamTotal);
