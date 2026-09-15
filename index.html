@@ -2200,7 +2200,7 @@ async function loadTeamView(leaderId) {
   const { data: allMembers, error: membersError } = await fetchAllRows((from, to) =>
     supabaseClient
       .from(TABLE_PROFILES)
-      .select('id, backoffice_id, full_name, role')
+      .select('id, backoffice_id, full_name, role, field')
       .in('role', ['agent', 'center_agent'])
       .in('field', myFields)
       .range(from, to)
@@ -3192,4 +3192,3 @@ document.addEventListener('visibilitychange', () => {
 
 </body>
 </html>
- 
