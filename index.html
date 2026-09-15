@@ -2203,7 +2203,7 @@ async function loadTeamView(leaderId) {
     supabaseClient
       .from(TABLE_TARGETS)
       .select('*')
-      .in('user_id', memberIds)
+      .in('agent_id', memberIds)
       .gte('report_date_sort', period.startSort)
       .lte('report_date_sort', period.endSort)
       .order('report_date_sort', { ascending: true })
@@ -2231,8 +2231,8 @@ async function loadTeamView(leaderId) {
 
   const rowsByUser = {};
   for (const r of (rows || [])) {
-    if (!rowsByUser[r.user_id]) rowsByUser[r.user_id] = [];
-    rowsByUser[r.user_id].push(r);
+    if (!rowsByUser[r.agent_id]) rowsByUser[r.agent_id] = [];
+    rowsByUser[r.agent_id].push(r);
   }
 
   const bugsByUser = {};
@@ -2550,7 +2550,7 @@ function renderCenterChart() {
   let rows = centerTargetRowsAll;
   let scopeLabel = 'کل نفرات';
   if (centerSelectedMemberId) {
-    rows = rows.filter(r => r.user_id === centerSelectedMemberId);
+    rows = rows.filter(r => r.agent_id === centerSelectedMemberId);
     const m = centerNormalAgentsAll.find(x => x.id === centerSelectedMemberId);
     scopeLabel = m ? (m.full_name || m.backoffice_id || '—') : 'کل نفرات';
   }
@@ -2712,8 +2712,8 @@ async function loadCenterView(centerId) {
     const { data: rows, error: rowsError } = await fetchAllRows((from, to) =>
       supabaseClient
         .from(TABLE_TARGETS)
-        .select('user_id, report_date_jalali, report_date_sort, target_count')
-        .in('user_id', agentIds)
+        .select('agent_id, report_date_jalali, report_date_sort, target_count')
+        .in('agent_id', agentIds)
         .gte('report_date_sort', period.startSort)
         .lte('report_date_sort', period.endSort)
         .order('report_date_sort', { ascending: true })
@@ -2850,7 +2850,7 @@ async function loadTargets(userId) {
   const { data, error } = await supabaseClient
     .from(TABLE_TARGETS)
     .select('*')
-    .eq('user_id', userId)
+    .eq('agent_id', userId)
     .gte('report_date_sort', period.startSort)
     .lte('report_date_sort', period.endSort)
     .order('report_date_sort', { ascending: true });
