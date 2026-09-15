@@ -1470,6 +1470,8 @@ const TABLE_PROFILES = "profiles";
 const TABLE_TEAM_ASSIGNMENTS = "team_assignments";
 const TABLE_META = "app_meta";
 const TABLE_CENTER_AGENT_REPORT = "center_agent_report";
+const TABLE_LEADER_CENTERS = "leader_centers";
+const TABLE_CENTER_AGENTS = "center_agents";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const loginScreen = document.getElementById('login-screen');
@@ -2126,7 +2128,7 @@ function buildMemberItemsHtml(membersWithTotals) {
 function buildGroupedMemberItemsHtml(membersWithTotals) {
   const groupsMap = new Map();
   membersWithTotals.forEach(item => {
-    const centerName = item.m.field || 'بدون سنتر';
+    const centerName = item.m.centerName || 'بدون سنتر';
     if (!groupsMap.has(centerName)) groupsMap.set(centerName, []);
     groupsMap.get(centerName).push(item);
   });
@@ -2182,16 +2184,58 @@ async function loadTeamView(leaderId) {
   const period = currentPeriodBounds();
   document.getElementById('team-period-label').textContent = `بازه‌ی جاری: ${period.startLabel} تا ${period.endLabel}`;
 
-  const { data: myProfile, error: myProfileError } = await supabaseClient
-    .from(TABLE_PROFILES)
-    .select('center_fields')
-    .eq('id', leaderId)
-    .single();
+  // اساین‌شدن سنترها به سرگروه از جدول رابطه‌ای leader_centers خونده می‌شه
+  const { data: myCenterLinks, error: myCenterLinksError } = await fetchAllRows((from, to) =>
+    supabaseClient
+      .from(TABLE_LEADER_CENTERS)
+      .select('center_id')
+      .eq('leader_id', leaderId)
+      .range(from, to)
+  );
 
-  const rawFields = myProfile ? myProfile.center_fields : null;
-  const myFields = Array.isArray(rawFields) ? rawFields.filter(Boolean) : (rawFields ? [rawFields] : []);
+  const myCenterIds = (myCenterLinks || []).map(l => l.center_id).filter(Boolean);
 
-  if (myProfileError || !myProfile || myFields.length === 0) {
+  if (myCenterLinksError || myCenterIds.length === 0) {
+    container.innerHTML = '<div class="empty-state">هنوز سنتری به شما اساین نشده است</div>';
+    document.getElementById('team-period-total').textContent = '۰';
+    return;
+  }
+
+  // اسم نمایشی هر سنتر، برای گروه‌بندی نفرات زیرمجموعه
+  const { data: centerProfiles, error: centerProfilesError } = await fetchAllRows((from, to) =>
+    supabaseClient
+      .from(TABLE_PROFILES)
+      .select('id, full_name')
+      .in('id', myCenterIds)
+      .range(from, to)
+  );
+
+  const centerNameById = {};
+  (centerProfiles || []).forEach(c => { centerNameById[c.id] = c.full_name || 'بدون سنتر'; });
+
+  // نفرات اساین‌شده به هر سنتر، از جدول رابطه‌ای center_agents
+  const { data: centerAgentLinks, error: centerAgentLinksError } = await fetchAllRows((from, to) =>
+    supabaseClient
+      .from(TABLE_CENTER_AGENTS)
+      .select('center_id, agent_id')
+      .in('center_id', myCenterIds)
+      .range(from, to)
+  );
+
+  if (centerAgentLinksError) {
+    container.innerHTML = `<div class="empty-state">خطا در دریافت اساین نیروها: ${centerAgentLinksError.message}</div>`;
+    document.getElementById('team-period-total').textContent = '—';
+    return;
+  }
+
+  const centerNameByAgentId = {};
+  (centerAgentLinks || []).forEach(l => {
+    centerNameByAgentId[l.agent_id] = centerNameById[l.center_id] || 'بدون سنتر';
+  });
+
+  const memberIdsFromLinks = Object.keys(centerNameByAgentId);
+
+  if (memberIdsFromLinks.length === 0) {
     container.innerHTML = '<div class="empty-state">هنوز نیرویی به شما اساین نشده است</div>';
     document.getElementById('team-period-total').textContent = '۰';
     return;
@@ -2200,9 +2244,9 @@ async function loadTeamView(leaderId) {
   const { data: allMembers, error: membersError } = await fetchAllRows((from, to) =>
     supabaseClient
       .from(TABLE_PROFILES)
-      .select('id, backoffice_id, full_name, role, field')
+      .select('id, backoffice_id, full_name, role')
+      .in('id', memberIdsFromLinks)
       .in('role', ['agent', 'center_agent'])
-      .in('field', myFields)
       .range(from, to)
   );
 
@@ -2216,6 +2260,8 @@ async function loadTeamView(leaderId) {
     document.getElementById('team-period-total').textContent = '۰';
     return;
   }
+
+  allMembers.forEach(m => { m.centerName = centerNameByAgentId[m.id] || 'بدون سنتر'; });
 
   const centerAgentMembers = allMembers.filter(m => m.role === 'center_agent');
   const members = allMembers.filter(m => m.role !== 'center_agent');
@@ -2696,18 +2742,26 @@ async function loadCenterView(centerId) {
   const centerAgentsListEl = document.getElementById('center-center-agents-list');
   const period = currentPeriodBounds();
 
-  const { data: myProfile, error: myProfileError } = await supabaseClient
+  const { data: myProfile } = await supabaseClient
     .from(TABLE_PROFILES)
-    .select('center_fields')
+    .select('full_name')
     .eq('id', centerId)
     .single();
 
-  const rawFields = myProfile ? myProfile.center_fields : null;
-  const myFields = Array.isArray(rawFields) ? rawFields.filter(Boolean) : (rawFields ? [rawFields] : []);
+  // نفرات اساین‌شده به این سنتر، از جدول رابطه‌ای center_agents
+  const { data: myAgentLinks, error: myAgentLinksError } = await fetchAllRows((from, to) =>
+    supabaseClient
+      .from(TABLE_CENTER_AGENTS)
+      .select('agent_id')
+      .eq('center_id', centerId)
+      .range(from, to)
+  );
 
-  if (myProfileError || !myProfile || myFields.length === 0) {
-    const msg = '<div class="admin-group-empty">رشته‌ی شما در پروفایل ثبت نشده است</div>';
-    document.getElementById('center-period-label').textContent = '';
+  const myAgentIds = (myAgentLinks || []).map(l => l.agent_id).filter(Boolean);
+
+  if (myAgentLinksError || myAgentIds.length === 0) {
+    const msg = '<div class="admin-group-empty">هنوز نیرویی به شما اساین نشده است</div>';
+    document.getElementById('center-period-label').textContent = myProfile ? `سنتر: ${myProfile.full_name}` : '';
     chartContainer.innerHTML = msg;
     bugsChartContainer.innerHTML = msg;
     memberListEl.innerHTML = msg;
@@ -2716,16 +2770,15 @@ async function loadCenterView(centerId) {
     return;
   }
 
-  centerMyFields = myFields;
   document.getElementById('center-period-label').textContent =
-    `رشته: ${centerMyFields.join('، ')} — بازه‌ی جاری: ${period.startLabel} تا ${period.endLabel}`;
+    `سنتر: ${myProfile ? myProfile.full_name : '—'} — بازه‌ی جاری: ${period.startLabel} تا ${period.endLabel}`;
 
-  const { data: agents, error: agentsError } = await fetchAllRows((from, to) =>
+  const { data: allAssignedMembers, error: agentsError } = await fetchAllRows((from, to) =>
     supabaseClient
       .from(TABLE_PROFILES)
-      .select('id, backoffice_id, full_name')
-      .eq('role', 'agent')
-      .in('field', centerMyFields)
+      .select('id, backoffice_id, full_name, role')
+      .in('id', myAgentIds)
+      .in('role', ['agent', 'center_agent'])
       .range(from, to)
   );
 
@@ -2736,7 +2789,7 @@ async function loadCenterView(centerId) {
     return;
   }
 
-  centerNormalAgentsAll = agents || [];
+  centerNormalAgentsAll = (allAssignedMembers || []).filter(m => m.role === 'agent');
   const agentIds = centerNormalAgentsAll.map(a => a.id);
 
   let targetRows = [];
@@ -2787,21 +2840,7 @@ async function loadCenterView(centerId) {
   refreshCenterBugsMemberList();
   renderCenterBugsChart();
 
-  const { data: centerAgents, error: centerAgentsError } = await fetchAllRows((from, to) =>
-    supabaseClient
-      .from(TABLE_PROFILES)
-      .select('id, backoffice_id, full_name')
-      .eq('role', 'center_agent')
-      .in('field', centerMyFields)
-      .range(from, to)
-  );
-
-  if (centerAgentsError) {
-    if (centerAgentsListEl) centerAgentsListEl.innerHTML = `<div class="admin-group-empty">خطا در دریافت کارشناسان مرکز: ${centerAgentsError.message}</div>`;
-    return;
-  }
-
-  centerCenterAgentsAll = centerAgents || [];
+  centerCenterAgentsAll = (allAssignedMembers || []).filter(m => m.role === 'center_agent');
   centerSelectedCenterAgentId = null;
   const centerAgentIds = centerCenterAgentsAll.map(a => a.id);
 
