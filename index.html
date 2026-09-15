@@ -2149,28 +2149,29 @@ async function loadTeamView(leaderId) {
   const period = currentPeriodBounds();
   document.getElementById('team-period-label').textContent = `بازه‌ی جاری: ${period.startLabel} تا ${period.endLabel}`;
 
-  const { data: assignments, error: assignError } = await supabaseClient
-    .from(TABLE_TEAM_ASSIGNMENTS)
-    .select('member_id')
-    .eq('leader_id', leaderId);
+  const { data: myProfile, error: myProfileError } = await supabaseClient
+    .from(TABLE_PROFILES)
+    .select('center_fields')
+    .eq('id', leaderId)
+    .single();
 
-  if (assignError) {
-    container.innerHTML = `<div class="empty-state">خطا در دریافت لیست نیروها: ${assignError.message}</div>`;
-    document.getElementById('team-period-total').textContent = '—';
-    return;
-  }
-  if (!assignments || assignments.length === 0) {
+  const rawFields = myProfile ? myProfile.center_fields : null;
+  const myFields = Array.isArray(rawFields) ? rawFields.filter(Boolean) : (rawFields ? [rawFields] : []);
+
+  if (myProfileError || !myProfile || myFields.length === 0) {
     container.innerHTML = '<div class="empty-state">هنوز نیرویی به شما اساین نشده است</div>';
     document.getElementById('team-period-total').textContent = '۰';
     return;
   }
 
-  const memberIdList = assignments.map(a => a.member_id);
-
-  const { data: allMembers, error: membersError } = await supabaseClient
-    .from(TABLE_PROFILES)
-    .select('id, backoffice_id, full_name, role')
-    .in('id', memberIdList);
+  const { data: allMembers, error: membersError } = await fetchAllRows((from, to) =>
+    supabaseClient
+      .from(TABLE_PROFILES)
+      .select('id, backoffice_id, full_name, role')
+      .in('role', ['agent', 'center_agent'])
+      .in('field', myFields)
+      .range(from, to)
+  );
 
   if (membersError) {
     container.innerHTML = `<div class="empty-state">خطا در دریافت پروفایل نیروها: ${membersError.message}</div>`;
